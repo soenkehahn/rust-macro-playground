@@ -8,20 +8,19 @@ enum Ast {
 fn pp(ast: Ast) -> String {
     match ast {
         Ast::Var { variable } => variable,
-        Ast::Lambda { parameter, body } => format!("|{}| {}", parameter, pp(*body)),
+        Ast::Lambda { parameter, body } => format!("# {} -> {}", parameter, pp(*body)),
         Ast::AppChain { terms } => {
             let mut result = terms
                 .into_iter()
                 .map(|term| format!("({})", pp(term)))
                 .collect::<Vec<String>>();
-            result.reverse();
             result.join(" ")
         }
     }
 }
 
 macro_rules! ast {
-    (| $parameter:ident | $body:tt) => {
+    (# $parameter:ident -> $body:tt) => {
         Ast::Lambda {
             parameter: stringify!($parameter).to_string(),
             body: Box::new(ast!($body)),
@@ -35,14 +34,17 @@ macro_rules! ast {
     (( $($t:tt)+ )) => {
         ast!($($t)+)
     };
-    ($($t:tt)+) => {
-        ast_h!([ ] $($t)+)
+    ($a:ident $($rest:tt)+) => {
+        ast_app_chain!([ ] $a $($rest)+)
     };
+    (( $($a:tt)+ ) $($rest:tt)+) => {
+        ast_app_chain!([ ] ( $($a)+ ) $($rest)+)
+    }
 }
 
-macro_rules! ast_h {
+macro_rules! ast_app_chain {
     ([ $($stack:tt),* ] $token:tt $($rest:tt)*) => {
-        ast_h!([ $token $(, $stack)* ] $($rest)*)
+        ast_app_chain!([ $($stack, )* $token ] $($rest)*)
     };
     ([ $($stack:tt),* ]) => {
         {
@@ -73,7 +75,7 @@ mod test {
 
     #[test]
     fn parses_lambdas() {
-        assert_eq!(pp(ast!(|x| y)), "|x| y");
+        assert_eq!(pp(ast!(# x -> y)), "# x -> y");
     }
 
     #[test]
@@ -83,12 +85,12 @@ mod test {
 
     #[test]
     fn parses_parenthesized_lambdas() {
-        assert_eq!(pp(ast!((|x| y))), "|x| y");
+        assert_eq!(pp(ast!((# x -> y))), "# x -> y");
     }
 
     #[test]
     fn parses_complex_terms() {
-        assert_eq!(pp(ast!((|x| x)(y))), "(|x| x) (y)");
+        assert_eq!(pp(ast!((# x -> x)(y))), "(# x -> x) (y)");
     }
 
     #[test]
