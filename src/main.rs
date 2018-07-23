@@ -22,10 +22,10 @@ fn pp(ast: Ast) -> String {
 }
 
 macro_rules! ast {
-    (par($($x:tt)+)) => {
+    (($($x:tt)+)) => {
         ast!($($x)+)
     };
-    ($f:tt($x:tt)) => {
+    (@ $f:tt $x:tt) => {
         Ast::App {
             function: Box::new(ast!($f)),
             argument: Box::new(ast!($x)),
@@ -59,7 +59,7 @@ mod test {
 
     #[test]
     fn parses_parenthesis() {
-        assert_eq!(pp(ast!(par(x))), "x");
+        assert_eq!(pp(ast!((x))), "x");
     }
 
     #[test]
@@ -69,11 +69,21 @@ mod test {
 
     #[test]
     fn parses_applications() {
-        assert_eq!(pp(ast!(x(y))), "(x)(y)");
+        assert_eq!(pp(ast!(@ x (y))), "(x)(y)");
     }
 
     #[test]
     fn parses_parenthesized_lambdas() {
-        assert_eq!(pp(ast!(par(|x| y))), "|x| y");
+        assert_eq!(pp(ast!((|x| y))), "|x| y");
+    }
+
+    #[test]
+    fn parses_complex_terms() {
+        assert_eq!(pp(ast!(@ (|x| x) (y))), "(|x| x)(y)");
+    }
+
+    #[test]
+    fn parses_chains_of_applications() {
+        assert_eq!(pp(ast!(@ (@ a b) c)), "((a)(b))(c)");
     }
 }
