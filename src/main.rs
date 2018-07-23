@@ -1,4 +1,8 @@
-#[derive(Debug)]
+#![feature(trace_macros)]
+
+use std::fmt::Display;
+
+#[derive(Debug, Clone)]
 enum Ast {
     Lambda { parameter: String, body: Box<Ast> },
     Var { variable: String },
@@ -7,7 +11,7 @@ enum Ast {
 
 fn pp(ast: Ast) -> String {
     match ast {
-        Ast::Var { variable } => variable,
+        Ast::Var { variable } => variable.clone(),
         Ast::Lambda { parameter, body } => format!("# {} -> {}", parameter, pp(*body)),
         Ast::AppChain { terms } => {
             let mut result = terms
@@ -16,6 +20,12 @@ fn pp(ast: Ast) -> String {
                 .collect::<Vec<String>>();
             result.join(" ")
         }
+    }
+}
+
+impl Display for Ast {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", pp((*self).clone()))
     }
 }
 
@@ -31,7 +41,7 @@ macro_rules! ast {
             variable: stringify!($x).to_string(),
         }
     };
-    (( $($t:tt)+ )) => {
+    ( ( $($t:tt)+ ) ) => {
         ast!($($t)+)
     };
     ($a:ident $($rest:tt)+) => {
@@ -60,6 +70,7 @@ fn main() {
     println!("{:?}", term);
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
 
