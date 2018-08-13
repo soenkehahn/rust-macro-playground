@@ -1,10 +1,10 @@
 #![macro_use]
 
 macro_rules! ast {
-    (# $parameter:ident -> $body:tt) => {
+    (# $parameter:ident -> $($body:tt)+) => {
         Ast::Lambda {
             parameter: stringify!($parameter).to_string(),
-            body: Box::new(ast!($body)),
+            body: Box::new(ast!($($body)+)),
         }
     };
     ($x:ident) => {
@@ -72,11 +72,16 @@ mod test {
 
     #[test]
     fn parses_complex_terms() {
-        assert_eq!(pretty(ast!((#x -> x)(y))), "(#x -> x) y");
+        assert_eq!(pretty(ast!((#x -> x) y)), "(#x -> x) y");
     }
 
     #[test]
     fn parses_chains_of_applications() {
         assert_eq!(pretty(ast!(a b c)), "a b c");
+    }
+
+    #[test]
+    fn parses_functions_with_multiple_arguments() {
+        assert_eq!(pretty(ast!(#x -> #y -> x y)), "#x -> #y -> x y");
     }
 }
