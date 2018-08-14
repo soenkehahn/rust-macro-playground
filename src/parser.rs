@@ -3,13 +3,29 @@
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
+pub struct Identifier {
+    pub identifier: String,
+    pub original: String,
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        if self.identifier == self.original {
+            write!(f, "{}", self.identifier)
+        } else {
+            write!(f, "{}<{}>", self.identifier, self.original)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Ast {
     Lambda {
-        parameter: String,
+        parameter: Identifier,
         body: Box<Ast>,
     },
     Var {
-        variable: String,
+        identifier: Identifier,
     },
     App {
         function: Box<Ast>,
@@ -28,7 +44,7 @@ impl Display for Ast {
             }
         }
         let result = match self {
-            Ast::Var { variable } => variable.clone(),
+            Ast::Var { identifier } => format!("{}", identifier),
             Ast::Lambda { parameter, body } => format!("#{} -> {}", parameter, body),
             Ast::App { function, argument } => {
                 format!("{} {}", wrap_in_parens(function), wrap_in_parens(argument))
@@ -59,14 +75,20 @@ pub fn from_app_chain(mut terms: Vec<Ast>) -> Ast {
 macro_rules! ast {
     (# $parameter:ident -> $($body:tt)+) => {
         Ast::Lambda {
-            parameter: stringify!($parameter).to_string(),
+            parameter: Identifier {
+                identifier: stringify!($parameter).to_string(),
+                original: stringify!($parameter).to_string(),
+            },
             body: Box::new(ast!($($body)+)),
             // body: Box::new(from_app_chain(_ast_app_chain!([ ] $($body)+))),
         }
     };
     ($x:ident) => {
         Ast::Var {
-            variable: stringify!($x).to_string(),
+            identifier: Identifier {
+                identifier: stringify!($x).to_string(),
+                original: stringify!($x).to_string(),
+            }
         }
     };
     ( ( $($t:tt)+ ) ) => {
