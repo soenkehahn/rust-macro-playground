@@ -1,19 +1,19 @@
 use parser::*;
 
 impl Ast {
-    pub fn eval(self) -> Ast {
-        let mut result = self.make_variables_unique();
+    pub fn eval(mut self) -> Ast {
         let mut cont = true;
         while cont {
-            println!("eval: {}", result);
-            match result.clone().step() {
+            println!("eval: {}", self);
+            self = self.make_variables_unique();
+            match self.clone().step() {
                 Some(new) => {
-                    result = new;
+                    self = new;
                 }
                 None => cont = false,
             }
         }
-        result
+        self
     }
 
     fn make_variables_unique(self) -> Ast {
@@ -39,7 +39,7 @@ impl Ast {
                     Some(new_variable) => {
                         let new_identifier = Identifier {
                             identifier: new_variable.clone(),
-                            original: parameter.identifier.clone(),
+                            original: parameter.original.clone(),
                         };
                         let new_body = inner(
                             variables,
@@ -109,10 +109,16 @@ impl Ast {
                     Ast::Var { identifier }
                 }
             }
-            Ast::Lambda { parameter, body } => Ast::Lambda {
-                parameter,
-                body: Box::new(body.replace(var, replacement)),
-            },
+            Ast::Lambda { parameter, body } => {
+                if parameter.identifier == var {
+                    Ast::Lambda { parameter, body }
+                } else {
+                    Ast::Lambda {
+                        parameter,
+                        body: Box::new(body.replace(var, replacement)),
+                    }
+                }
+            }
             Ast::App { function, argument } => Ast::App {
                 function: Box::new(function.replace(var.clone(), replacement.clone())),
                 argument: Box::new(argument.replace(var, replacement)),
@@ -150,13 +156,13 @@ mod test {
     #[test]
     fn allows_to_implement_not_without_alpha_conversion() {
         let term = ast!((#b -> (# tt -> (# ff -> (b ff tt)))) (# t -> (# f -> t)));
-        assert_eq!(term.eval().pretty(), "#v1<tt> -> #v2<ff> -> v2<ff>");
+        assert_eq!(term.eval().pretty(), "#v0<tt> -> #v1<ff> -> v1<ff>");
     }
 
     #[test]
     fn allows_to_implement_not_with_alpha_conversion() {
         let term = ast!((#b -> (# t -> (# f -> (b f t)))) (# t -> (# f -> t)));
-        assert_eq!(term.eval().pretty(), "#v1<t> -> #v2<f> -> v2<f>");
+        assert_eq!(term.eval().pretty(), "#v0<t> -> #v1<f> -> v1<f>");
     }
 
     #[test]
@@ -171,13 +177,15 @@ mod test {
     #[test]
     fn allows_to_implement_apply() {
         let term = ast!((#fun -> (#x -> fun x)) (#x -> x) (# t -> # f -> t));
-        assert_eq!(term.eval().pretty(), "#v3<t> -> #v4<f> -> v3<t>");
+        assert_eq!(term.eval().pretty(), "#v0<t> -> #v1<f> -> v0<t>");
     }
 
-    // #[test]
-    // fn allows_to_apply_not_three_times() {
-    //     let term =
-    //         ast!((#fun -> (#x -> (fun (fun x)))) (#b -> # t -> # f -> b f t) (# t -> # f -> t));
-    //     assert_eq!(term.eval().pretty(), "#t -> #f -> f");
-    // }
+    #[test]
+    fn proper_alpha_conversion() {
+        let term = ast!(#clashing -> ((#x -> #clashing -> clashing x) clashing));
+        assert_eq!(
+            term.eval().pretty(),
+            "#v0<clashing> -> #v1<clashing> -> v1<clashing> v0<clashing>"
+        );
+    }
 }
