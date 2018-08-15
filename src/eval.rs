@@ -1,10 +1,10 @@
 use parser::*;
+use std::collections::HashSet;
 
 impl Ast {
     pub fn eval(mut self) -> Ast {
         let mut cont = true;
         while cont {
-            println!("eval: {}", self);
             self = self.make_variables_unique();
             match self.clone().step() {
                 Some(new) => {
@@ -16,17 +16,41 @@ impl Ast {
         self
     }
 
+    fn get_used_variables(&self) -> HashSet<String> {
+        match self {
+            Ast::Var { identifier } => {
+                let mut result = HashSet::new();
+                result.insert(identifier.identifier.clone());
+                result
+            }
+            Ast::Lambda { parameter, body } => {
+                let mut result = body.get_used_variables();
+                result.insert(parameter.identifier.clone());
+                result
+            }
+            Ast::App { function, argument } => {
+                let function_identifiers = function.get_used_variables();
+                let argument_identifiers = argument.get_used_variables();
+                let union = function_identifiers.union(&argument_identifiers);
+                union.map(|x| x.clone()).collect() //change to cloned?
+            }
+        }
+    }
+
     fn make_variables_unique(self) -> Ast {
-        struct AllVariables(i32);
+        struct AllVariables {
+            counter: i32,
+            used_variables: HashSet<String>,
+        };
         impl Iterator for AllVariables {
             type Item = String;
             fn next(&mut self) -> Option<String> {
-                match self {
-                    AllVariables(ref mut counter) => {
-                        let r = Some(format!("v{}", counter));
-                        *counter += 1;
-                        r
-                    }
+                let r = format!("v{}", self.counter);
+                self.counter += 1;
+                if self.used_variables.contains(&r) {
+                    self.next()
+                } else {
+                    Some(r)
                 }
             }
         }
@@ -66,7 +90,13 @@ impl Ast {
                 }
             }
         }
-        inner(&mut AllVariables(0), self)
+        inner(
+            &mut AllVariables {
+                counter: 0,
+                used_variables: self.get_used_variables(),
+            },
+            self,
+        )
     }
 
     fn step(self) -> Option<Ast> {
@@ -156,28 +186,63 @@ mod test {
     #[test]
     fn allows_to_implement_not_without_alpha_conversion() {
         let term = ast!((#b -> (# tt -> (# ff -> (b ff tt)))) (# t -> (# f -> t)));
-        assert_eq!(term.eval().pretty(), "#v0<tt> -> #v1<ff> -> v1<ff>");
+        assert_eq!(term.eval().pretty(), "#v0<tt> -> #v3<ff> -> v3<ff>");
     }
 
     #[test]
     fn allows_to_implement_not_with_alpha_conversion() {
         let term = ast!((#b -> (# t -> (# f -> (b f t)))) (# t -> (# f -> t)));
-        assert_eq!(term.eval().pretty(), "#v0<t> -> #v1<f> -> v1<f>");
+        assert_eq!(term.eval().pretty(), "#v0<t> -> #v3<f> -> v3<f>");
     }
 
-    #[test]
-    fn make_all_variables_unique() {
-        let term = ast!((#x -> (#y -> x y)) (#x -> x));
-        assert_eq!(
-            term.make_variables_unique().pretty(),
-            "(#v0<x> -> #v1<y> -> v0<x> v1<y>) (#v2<x> -> v2<x>)"
-        );
+    mod make_variables_unique {
+        use super::*;
+
+        #[test]
+        fn works() {
+            let term = ast!((#x -> (#y -> x y)) (#x -> x));
+            assert_eq!(
+                term.make_variables_unique().pretty(),
+                "(#v0<x> -> #v1<y> -> v0<x> v1<y>) (#v2<x> -> v2<x>)"
+            );
+        }
+
+        #[test]
+        fn does_not_use_existing_variables() {
+            let term = ast!(#x -> #v0 -> x v1);
+            assert_eq!(
+                term.make_variables_unique().pretty(),
+                "#v2<x> -> #v3<v0> -> v2<x> v1"
+            );
+        }
+    }
+
+    mod get_used_variables {
+        use super::*;
+
+        #[test]
+        fn does_return_the_current_identifiers() {
+            let var = Ast::Lambda {
+                parameter: Identifier {
+                    identifier: "foo".to_string(),
+                    original: "foo_original".to_string(),
+                },
+                body: Box::new(Ast::Var {
+                    identifier: Identifier {
+                        identifier: "bar".to_string(),
+                        original: "bar_original".to_string(),
+                    },
+                }),
+            };
+            let expected: HashSet<String> = ["foo", "bar"].iter().map(|x| x.to_string()).collect();
+            assert_eq!(var.get_used_variables(), expected);
+        }
     }
 
     #[test]
     fn allows_to_implement_apply() {
         let term = ast!((#fun -> (#x -> fun x)) (#x -> x) (# t -> # f -> t));
-        assert_eq!(term.eval().pretty(), "#v0<t> -> #v1<f> -> v0<t>");
+        assert_eq!(term.eval().pretty(), "#v0<t> -> #v3<f> -> v0<t>");
     }
 
     #[test]
@@ -185,7 +250,7 @@ mod test {
         let term = ast!(#clashing -> ((#x -> #clashing -> clashing x) clashing));
         assert_eq!(
             term.eval().pretty(),
-            "#v0<clashing> -> #v1<clashing> -> v1<clashing> v0<clashing>"
+            "#v1<clashing> -> #v3<clashing> -> v3<clashing> v1<clashing>"
         );
     }
 }
