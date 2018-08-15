@@ -253,4 +253,11 @@ mod test {
             "#v1<clashing> -> #v3<clashing> -> v3<clashing> v1<clashing>"
         );
     }
+
+    #[test]
+    fn allows_to_apply_not_three_times() {
+        let term =
+            ast!((#fun -> (#x -> fun (fun (fun x)))) (#b -> # t -> # f -> b f t) (# t -> # f -> t));
+        assert_eq!(term.eval().pretty(), "#v0<t> -> #v3<f> -> v3<f>");
+    }
 }
